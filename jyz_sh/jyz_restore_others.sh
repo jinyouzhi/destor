@@ -9,10 +9,10 @@ do
     echo $i
     echo $date
     echo $user
-    for seg_len in 1024 2048 ; do
-    for method in pattern opt lru asm ; do
+    for seg_len in 2048 ; do
+    for method in pattern opt ; do
     	if [ $method = "pattern" ] ; then
-		mc=0
+		mc=400
 	else
 		mc=400
 	fi
