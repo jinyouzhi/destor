@@ -321,7 +321,9 @@ static void read_data_by_merged_pattern(int *pattern, GSequence *a1, GSequence *
                 read_len += me->len;
         }else if (flag==1) {
             flag = 0;
-            read_data_in_container(cid, read_off, read_len, write_buf+buff_off);
+	     read_data_in_container(cid, read_off, read_len, write_buf+buff_off);
+            
+        
             DEBUG("read %d data at offset %d ", read_len, read_off);
             buff_off += read_len;
         }
@@ -763,6 +765,9 @@ void* optimal_pattern_restore_thread(void *arg) {
     while (1) {
         assert(s2 == NULL);
         
+        TIMER_DECLARE(1);
+        TIMER_BEGIN(1);
+        
         //generate chunk list of s2
         while (c && !s2) {
             c = sync_queue_pop(restore_recipe_queue);
@@ -833,13 +838,13 @@ void* optimal_pattern_restore_thread(void *arg) {
                 
                 //TODO: optimal read
                 if (destor.restore_cache[1]&&is_fetch_container(pattern, t_num, me->chunk_num, pattern_count, ch->id)) {
-                    TIMER_DECLARE(1);
-                    TIMER_BEGIN(1);
+                    TIMER_DECLARE(13);
+                    TIMER_BEGIN(13);
                     
                     struct container* con = retrieve_container_by_id(ch->id);
                     //lookup the container in the looking forward window.
                     
-                    TIMER_END(1,jcr.read_chunk_time);
+                    TIMER_END(13,jcr.retrieve_con_time);
                     
                     int *cnt = g_hash_table_lookup(ht_looking_forward_window, &ch->id);
                     assert(cnt);
@@ -847,23 +852,30 @@ void* optimal_pattern_restore_thread(void *arg) {
                         insert_container_into_data_cache(con);
                     }
                     jcr.read_container_num++;
+                    	TIMER_DECLARE(11);
+			TIMER_BEGIN(11);
                     read_data_by_pattern_in_data_cache(s1_chunk_list,s1_cur_len, con);
+			TIMER_END(11, jcr.read_cache_time);
                 }else{
                     //allocate data space
                     buff = allocate_data_buffer(pattern, t_chunk_list, t_num);
                     //read data
+			TIMER_DECLARE(12);
+			TIMER_BEGIN(12);
                     read_data_by_pattern(pattern, s1_chunk_list, t_chunk_list, s1_cur_len, t_num, buff);
+			TIMER_END(12, jcr.read_pattern_time);
                 }
             }else {
                 //generate the merged patterns in seqence s1, s2 and t
                 pattern = generate_merged_pattern(s1_chunk_list, s2_chunk_list, t_chunk_list, s1_cur_len, s2_cur_len, t_num, &pattern_count);
                 if (destor.restore_cache[1]&&is_fetch_container(pattern, t_num, me->chunk_num, pattern_count, ch->id)) {
-                    TIMER_DECLARE(1);
-                    TIMER_BEGIN(1);
+                    TIMER_DECLARE(13);
+                    TIMER_BEGIN(13);
                     
                     struct container* con = retrieve_container_by_id(ch->id);
                     //lookup the container in the looking forward window.
-                    TIMER_END(1,jcr.read_chunk_time);
+                    
+                    TIMER_END(13,jcr.retrieve_con_time);
                     
                     int *cnt = g_hash_table_lookup(ht_looking_forward_window, &ch->id);
                     assert(cnt);
@@ -872,11 +884,17 @@ void* optimal_pattern_restore_thread(void *arg) {
                     }
                     
                     jcr.read_container_num++;
+			TIMER_DECLARE(11);
+			TIMER_BEGIN(11);
                     read_data_by_pattern_in_data_cache(s1_chunk_list,s1_cur_len, con);
+			TIMER_END(11, jcr.read_cache_time);
                 }else{
                     buff = allocate_data_buffer(pattern, t_chunk_list, t_num);
                     //read data
+			TIMER_DECLARE(12);
+			TIMER_BEGIN(12);
                     read_data_by_merged_pattern(pattern, s1_chunk_list, s2_chunk_list, t_chunk_list, s1_cur_len, s2_cur_len, t_num, buff);
+			TIMER_END(12, jcr.read_pattern_time);
                 }
             }
             
@@ -898,6 +916,8 @@ void* optimal_pattern_restore_thread(void *arg) {
         s1_cur_len = s2_cur_len;
         s2_chunk_list = NULL;
         s2_cur_len = 0;
+        
+        TIMER_END(1,jcr.read_chunk_time);
         
         //
         if(destor.restore_cache[1]){

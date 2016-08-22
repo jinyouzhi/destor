@@ -57,6 +57,9 @@ struct jcr{
 	double read_chunk_time;
 	double write_chunk_time;
     
+    	double retrieve_con_time;
+	double read_pattern_time;
+	double read_cache_time;
     double self_time;
 
 	int32_t read_container_num;

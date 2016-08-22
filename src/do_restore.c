@@ -300,6 +300,7 @@ void do_restore(int revision, char *path) {
 			jcr.data_size * 1000000 / jcr.read_recipe_time / 1024 / 1024);
 	printf("read_chunk_time : %.3fs(%.3fs), %.2fMB/s\n", jcr.read_chunk_time / 1000000, jcr.self_time/1000000,
 			jcr.data_size * 1000000 / jcr.read_chunk_time / 1024 / 1024);
+	printf("retrieve_container_time : %.3fs, read_cache_time : %.3fs, read_pattern_time : %.3fs\n", jcr.retrieve_con_time / 1000000, jcr.read_cache_time / 1000000, jcr.read_pattern_time/1000000);
 	printf("write_chunk_time : %.3fs, %.2fMB/s\n",
 			jcr.write_chunk_time / 1000000,
 			jcr.data_size * 1000000 / jcr.write_chunk_time / 1024 / 1024);

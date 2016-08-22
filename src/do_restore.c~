@@ -7,6 +7,7 @@
 
 extern void init_segmenting_method();
 
+
 static void* lru_restore_thread(void *arg) {
 	struct lruCache *cache;
 	if (destor.simulation_level >= SIMULATION_RESTORE)
@@ -197,8 +198,12 @@ void* write_restore_data(void* arg) {
 
 		TIMER_END(1, jcr.write_chunk_time);
 	}
-
     jcr.status = JCR_STATUS_DONE;
+
+    pthread_mutex_lock(&mutex);
+    pthread_cond_signal(&cond);
+    pthread_mutex_unlock(&mutex);
+    
     return NULL;
 }
 
@@ -209,18 +214,19 @@ void do_restore(int revision, char *path) {
     init_segmenting_method();
 
 	init_restore_jcr(revision, path);
+    
+    pthread_mutex_init(&mutex,0);
+    pthread_cond_init(&cond, NULL);
 
 	destor_log(DESTOR_NOTICE, "job id: %d", jcr.id);
 	destor_log(DESTOR_NOTICE, "backup path: %s", jcr.bv->path);
 	destor_log(DESTOR_NOTICE, "restore to: %s", jcr.path);
 
-	restore_chunk_queue = sync_queue_new(1024);
-	restore_recipe_queue = sync_queue_new(1024);
+	restore_chunk_queue = sync_queue_new(destor.index_segment_algorithm[1]*2);
+	restore_recipe_queue = sync_queue_new(destor.index_segment_algorithm[1]*2);
 
 	TIMER_DECLARE(1);
 	TIMER_BEGIN(1);
-
-	
 
     jcr.status = JCR_STATUS_RUNNING;
 	pthread_t recipe_t, read_t, write_t;
@@ -238,7 +244,7 @@ void do_restore(int revision, char *path) {
     } else if (destor.restore_cache[0] == RESTORE_CACHE_PATTERN) {
         destor_log(DESTOR_NOTICE, "restore cache is PATTERN");
         
-        pthread_create(&read_t, NULL, pattern_restore_plus_thread, NULL);
+        pthread_create(&read_t, NULL, optimal_pattern_restore_thread, NULL);//pattern_restore_plus_thread
     } else {
 		fprintf(stderr, "Invalid restore cache.\n");
 		exit(1);
@@ -246,12 +252,24 @@ void do_restore(int revision, char *path) {
 
 	pthread_create(&write_t, NULL, write_restore_data, NULL);
 
-    do{
+    /*do{
         sleep(5);
-        /*time_t now = time(NULL);*/
+        //time_t now = time(NULL);
         fprintf(stderr, "%" PRId64 " bytes, %" PRId32 " chunks, %d files processed\r", 
                 jcr.data_size, jcr.chunk_num, jcr.file_num);
-    }while(jcr.status == JCR_STATUS_RUNNING || jcr.status != JCR_STATUS_DONE);
+    }while(jcr.status == JCR_STATUS_RUNNING || jcr.status != JCR_STATUS_DONE);*/
+    struct timeval now;
+    struct timespec outtime;
+    pthread_mutex_lock(&mutex);
+    while(jcr.status == JCR_STATUS_RUNNING || jcr.status != JCR_STATUS_DONE){
+        fprintf(stderr, "%" PRId64 " bytes, %" PRId32 " chunks, %d files processed\r", 
+                jcr.data_size, jcr.chunk_num, jcr.file_num);
+        gettimeofday(&now, NULL);  
+        outtime.tv_sec = now.tv_sec + 5;  
+        outtime.tv_nsec = now.tv_usec * 1000;  
+        pthread_cond_timedwait(&cond, &mutex, &outtime); 
+    }
+    pthread_mutex_unlock(&mutex); 
     fprintf(stderr, "%" PRId64 " bytes, %" PRId32 " chunks, %d files processed\n", 
         jcr.data_size, jcr.chunk_num, jcr.file_num);
 
@@ -261,6 +279,9 @@ void do_restore(int revision, char *path) {
 	free_backup_version(jcr.bv);
 
 	TIMER_END(1, jcr.total_time);
+    
+    pthread_mutex_destroy(&mutex);
+    pthread_cond_destroy(&cond);
 	
 
 	printf("job id: %" PRId32 "\n", jcr.id);
@@ -277,8 +298,9 @@ void do_restore(int revision, char *path) {
 	printf("read_recipe_time : %.3fs, %.2fMB/s\n",
 			jcr.read_recipe_time / 1000000,
 			jcr.data_size * 1000000 / jcr.read_recipe_time / 1024 / 1024);
-	printf("read_chunk_time : %.3fs, %.2fMB/s\n", jcr.read_chunk_time / 1000000,
+	printf("read_chunk_time : %.3fs(%.3fs), %.2fMB/s\n", jcr.read_chunk_time / 1000000, jcr.self_time/1000000,
 			jcr.data_size * 1000000 / jcr.read_chunk_time / 1024 / 1024);
+	printf("retrieve_container_time : %.3fs, read_cache_time : %.3fs, read_pattern_time : %.3fs\n", jcr.retrieve_con_time / 1000000, jcr.read_cache_time / 1000000, jcr.read_pattern_time/1000000);
 	printf("write_chunk_time : %.3fs, %.2fMB/s\n",
 			jcr.write_chunk_time / 1000000,
 			jcr.data_size * 1000000 / jcr.write_chunk_time / 1024 / 1024);
