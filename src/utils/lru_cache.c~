@@ -57,7 +57,7 @@ void* lru_cache_lookup(struct lruCache* c, void* user_data) {
 void* lru_cache_lookup_without_update(struct lruCache* c, void* user_data) {
 	GList* elem = g_list_first(c->elem_queue);
 	while (elem) {
-		if (c->hit_elem(elem->data, user_data))
+		if (c->hit_elem(elem->data, user_data))check_id
 			break;
 		elem = g_list_next(elem);
 	}

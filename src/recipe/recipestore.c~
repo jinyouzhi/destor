@@ -307,8 +307,7 @@ void append_file_recipe_meta(struct backupVersion* b, struct fileRecipeMeta* r) 
 /*
  * 8-byte segment id,
  * 16-bit backup id, 32-bit off, 16-bit size
- */
-
+ 
 static inline segmentid make_segment_id(int64_t bid, int64_t off, int64_t size){
 	return (bid << 48) + (off << 16) + size;
 }
@@ -325,9 +324,12 @@ static inline int64_t id_to_bnum(segmentid id) {
 	return id >> 48;
 }
 
+*/
+
 /*
  * 8-byte segment id,
  * 8-bit backup id, 40-bit off, 16-bit size
+ */
 static inline segmentid make_segment_id(int64_t bid, int64_t off, int64_t size){
 	return (bid << 56) + (off << 16) + size;
 }
@@ -343,7 +345,6 @@ static inline int64_t id_to_bnum(segmentid id) {
 	return id >> 56;
 }
 
- */
 
 segmentid append_segment_flag(struct backupVersion* b, int flag, int segment_size){
 	assert(flag == CHUNK_SEGMENT_START || flag == CHUNK_SEGMENT_END);
