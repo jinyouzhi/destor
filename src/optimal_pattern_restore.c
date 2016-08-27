@@ -772,9 +772,9 @@ static void remove_looking_forward_window(int remove_size){
                 ht_looking_forward_window_size--;
 
                 //kicks the zero one from datacache
-                //NOTICE("kicks invalid cached container (%d)", *cid);
-        	//GList *con_list = g_hash_table_lookup(ht_dataCache, cid);
-                //lru_cache_kicks_with_hash(dataCache, con_list);
+                NOTICE("kicks invalid cached container (%d)", *cid);
+        	GList *con_list = g_hash_table_lookup(ht_dataCache, cid);
+                lru_cache_kicks_with_hash(dataCache, con_list);
                 
 		//g_hash_table_remove(ht_dataCache, cid);
 

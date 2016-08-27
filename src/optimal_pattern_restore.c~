@@ -772,9 +772,9 @@ static void remove_looking_forward_window(int remove_size){
                 ht_looking_forward_window_size--;
 
                 //kicks the zero one from datacache
-                //NOTICE("kicks invalid cached container (%d)", *cid);
-        	//GList *con_list = g_hash_table_lookup(ht_dataCache, cid);
-                //lru_cache_kicks_with_hash(dataCache, con_list);
+                NOTICE("kicks invalid cached container (%d)", *cid);
+        	GList *con_list = g_hash_table_lookup(ht_dataCache, cid);
+                lru_cache_kicks_with_hash(dataCache, con_list);
                 
 		//g_hash_table_remove(ht_dataCache, cid);
 
@@ -1015,6 +1015,10 @@ void* optimal_pattern_restore_thread(void *arg) {
             break;
     }
 
+    //caculate the retrieve container times
+    WARNING("read %d containers", jcr.read_container_num);
+    
+    
     sync_queue_term(restore_chunk_queue);
     if (s1_chunk_list) {
         g_sequence_free(s1_chunk_list);
@@ -1032,7 +1036,6 @@ void* optimal_pattern_restore_thread(void *arg) {
         destroy_looking_forward_window();
     }
 
-    WARNING("read %d containers", jcr.read_container_num);
 
     return NULL;
 }
