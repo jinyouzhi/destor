@@ -510,8 +510,8 @@ static void remove_cached_chunks_in_unread_list(GSequence* s_list, int32_t* s_le
                     //kicks the zero one from datacache
                     NOTICE("kicks invalid cached container (%d)", last_id);
         	    GList *con_list = g_hash_table_lookup(ht_dataCache, &last_id);
-                    lru_cache_kicks(dataCache, con_list, container_check_id);
-		    g_hash_table_remove(ht_dataCache, &last_id);
+                    lru_cache_kicks_with_hash(dataCache, con_list);
+         	    g_hash_table_remove(ht_dataCache, &last_id);
                 }else if(*cnt==1){
                     count_greater_than_two--;
                 }
@@ -557,7 +557,7 @@ static void remove_cached_chunks_in_unread_list(GSequence* s_list, int32_t* s_le
                 //kicks the zero one from datacache
                 NOTICE("kicks invalid cached container (%d)", last_id);
         	GList *con_list = g_hash_table_lookup(ht_dataCache, &last_id);
-                lru_cache_kicks(dataCache, &last_id, container_check_id);
+                lru_cache_kicks_with_hash(dataCache, con_list);
 		g_hash_table_remove(ht_dataCache, &last_id);
             }else if(*cnt==1){
                 count_greater_than_two--;
@@ -769,7 +769,7 @@ static void remove_looking_forward_window(int remove_size){
                 //kicks the zero one from datacache
                 //NOTICE("kicks invalid cached container (%d)", *cid);
         	//GList *con_list = g_hash_table_lookup(ht_dataCache, &last_id);
-                //lru_cache_kicks(dataCache, cid, container_check_id);
+                //lru_cache_kicks_with_hash(dataCache, con_list);
 
             }else if(*cnt==1){
                 count_greater_than_two--;

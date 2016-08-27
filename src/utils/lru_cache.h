@@ -34,6 +34,7 @@ void* lru_cache_hits(struct lruCache* c, void* user_data,
 /* Kick the elem that makes func returning 1. */
 void lru_cache_kicks(struct lruCache* c, void* user_data,
 		int (*func)(void* elem, void* user_data));
+void lru_cache_kicks_with_hash(struct lruCache* c, void* user_data);
 GList* lru_cache_insert(struct lruCache *c, void* data,
 		void (*victim)(void*, void*), void* user_data);
 int lru_cache_is_full(struct lruCache*);
