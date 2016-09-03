@@ -686,7 +686,7 @@ static void init_looking_forward_window(int n){
 static void remove_looking_forward_window(int remove_size){
     int i;
     //remove containers which will be processed in the window
-    /*
+
     for (i=0; i<remove_size; i++) {
         containerid* cid = g_queue_pop_head(looking_forward_queue);
         assert(cid);
@@ -707,7 +707,7 @@ static void remove_looking_forward_window(int remove_size){
         }
         free(cid);
     }
-    */
+
     looking_forward_window_size -= remove_size;
 }
 
