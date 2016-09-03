@@ -8,7 +8,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "lru_cache.h"
+#include "opt_cache.h"
+#include "../hash_table.h"
+#include "../storage/containerstore.h"
 
 /*
  * The container read cache.
@@ -94,11 +96,30 @@ GList* lru_cache_insert(struct lruCache *c, void* data,
 		void (*func)(void*, void*), void* user_data) {
 	void *victim = 0;
 	if (c->max_size > 0 && c->size == c->max_size) {
-		GList *last = g_list_last(c->elem_queue);
-		c->elem_queue = g_list_remove_link(c->elem_queue, last);
-		victim = last->data;
-        
-		g_list_free_1(last);
+		int mintimes = 32767;
+		int *cnt;
+		GList *cur = g_list_last(c->elem_queue);
+		GList *minindex = cur;
+		while(mintimes > 0 && cur != g_list_first(c->elem_queue))
+		{
+            struct container *con = cur->data;
+            struct containerMeta *meta = &con->meta;
+			cnt = g_hash_table_lookup(ht_looking_forward_window, &meta->id);
+			if(cnt == NULL || *cnt < mintimes)
+			{
+				if(cnt == NULL)
+					mintimes = 0;
+				else
+					mintimes = *cnt;
+				minindex = cur;
+			}
+			g_list_previous(cur);
+		}
+		cur = minindex;
+		c->elem_queue = g_list_remove_link(c->elem_queue, cur);
+		victim = cur->data;
+
+		g_list_free_1(cur);
 		c->size--;
 	}
 

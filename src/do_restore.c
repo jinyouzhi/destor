@@ -177,7 +177,7 @@ void* write_restore_data(void* arg) {
 					NOTICE("open file failed: %s", filepath);
 					assert(fp);
 				}
-							
+
 			}
 
 			sdsfree(filepath);
@@ -203,18 +203,18 @@ void* write_restore_data(void* arg) {
     pthread_mutex_lock(&mutex);
     pthread_cond_signal(&cond);
     pthread_mutex_unlock(&mutex);
-    
+
     return NULL;
 }
 
 void do_restore(int revision, char *path) {
 	init_recipe_store();
 	init_container_store();
-    
+
     init_segmenting_method();
 
 	init_restore_jcr(revision, path);
-    
+
     pthread_mutex_init(&mutex,0);
     pthread_cond_init(&cond, NULL);
 
@@ -237,13 +237,13 @@ void do_restore(int revision, char *path) {
 		pthread_create(&read_t, NULL, lru_restore_thread, NULL);
 	} else if (destor.restore_cache[0] == RESTORE_CACHE_OPT) {
 		destor_log(DESTOR_NOTICE, "restore cache is OPT");
-		pthread_create(&read_t, NULL, optimal_restore_thread, NULL);
+		pthread_create(&read_t, NULL, pattern_optimal_restore_thread, NULL);
 	} else if (destor.restore_cache[0] == RESTORE_CACHE_ASM) {
 		destor_log(DESTOR_NOTICE, "restore cache is ASM");
 		pthread_create(&read_t, NULL, assembly_restore_thread, NULL);
     } else if (destor.restore_cache[0] == RESTORE_CACHE_PATTERN) {
         destor_log(DESTOR_NOTICE, "restore cache is PATTERN");
-        
+
         pthread_create(&read_t, NULL, optimal_pattern_restore_thread, NULL);//pattern_restore_plus_thread
     } else {
 		fprintf(stderr, "Invalid restore cache.\n");
@@ -255,22 +255,22 @@ void do_restore(int revision, char *path) {
     /*do{
         sleep(5);
         //time_t now = time(NULL);
-        fprintf(stderr, "%" PRId64 " bytes, %" PRId32 " chunks, %d files processed\r", 
+        fprintf(stderr, "%" PRId64 " bytes, %" PRId32 " chunks, %d files processed\r",
                 jcr.data_size, jcr.chunk_num, jcr.file_num);
     }while(jcr.status == JCR_STATUS_RUNNING || jcr.status != JCR_STATUS_DONE);*/
     struct timeval now;
     struct timespec outtime;
     pthread_mutex_lock(&mutex);
     while(jcr.status == JCR_STATUS_RUNNING || jcr.status != JCR_STATUS_DONE){
-        fprintf(stderr, "%" PRId64 " bytes, %" PRId32 " chunks, %d files processed\r", 
+        fprintf(stderr, "%" PRId64 " bytes, %" PRId32 " chunks, %d files processed\r",
                 jcr.data_size, jcr.chunk_num, jcr.file_num);
-        gettimeofday(&now, NULL);  
-        outtime.tv_sec = now.tv_sec + 5;  
-        outtime.tv_nsec = now.tv_usec * 1000;  
-        pthread_cond_timedwait(&cond, &mutex, &outtime); 
+        gettimeofday(&now, NULL);
+        outtime.tv_sec = now.tv_sec + 5;
+        outtime.tv_nsec = now.tv_usec * 1000;
+        pthread_cond_timedwait(&cond, &mutex, &outtime);
     }
-    pthread_mutex_unlock(&mutex); 
-    fprintf(stderr, "%" PRId64 " bytes, %" PRId32 " chunks, %d files processed\n", 
+    pthread_mutex_unlock(&mutex);
+    fprintf(stderr, "%" PRId64 " bytes, %" PRId32 " chunks, %d files processed\n",
         jcr.data_size, jcr.chunk_num, jcr.file_num);
 
 	assert(sync_queue_size(restore_chunk_queue) == 0);
@@ -279,10 +279,10 @@ void do_restore(int revision, char *path) {
 	free_backup_version(jcr.bv);
 
 	TIMER_END(1, jcr.total_time);
-    
+
     pthread_mutex_destroy(&mutex);
     pthread_cond_destroy(&cond);
-	
+
 
 	printf("job id: %" PRId32 "\n", jcr.id);
 	printf("restore path: %s\n", jcr.path);
