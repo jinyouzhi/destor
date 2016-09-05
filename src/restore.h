@@ -23,5 +23,6 @@ void* pattern_restore_thread(void *arg);
 void* pattern_restore_plus_thread(void *arg);
 void* optimal_pattern_restore_thread(void *arg);
 void* pattern_optimal_restore_thread(void *arg);
+void* pattern_optimal_restore_plus_thread(void *arg);
 
 #endif /* RESTORE_H_ */

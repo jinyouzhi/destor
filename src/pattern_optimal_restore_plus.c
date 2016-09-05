@@ -5,7 +5,7 @@
 #include "storage/containerstore.h"
 #include "index/index.h"
 #include "restore.h"
-#include "utils/lru_cache.h"
+#include "utils/opt_cache.h"
 
 //#include "utils/rio_read.h"
 
@@ -21,14 +21,10 @@ static GHashTable *ht_dataCache;
 static struct lruCache *metaCache;
 static GHashTable *ht_metaCache;
 
-static GQueue *looking_forward_queue;
-static GHashTable *ht_looking_forward_window;
-static int looking_forward_window_size = 0;
-static int ht_looking_forward_window_size = 0;
-static int count_greater_than_two = 0;
-static int is_window_end = 0;
+#include "hash_table.h"
 
 //static rio_t rio;
+
 
 /*
  * Used by restoring
@@ -133,7 +129,8 @@ static void remove_container_from_ht_data_cache(struct container *con, GHashTabl
         NOTICE("remvoe container (%lld) from data cache but its counter is %d", me->id, *cnt);
     }
     //
-    
+
+
 }
 
 
@@ -488,39 +485,29 @@ static void remove_cached_chunks_in_unread_list(GSequence* s_list, int32_t* s_le
     GSequenceIter *s_iter = g_sequence_get_begin_iter(s_list);
     GSequenceIter *s_end = g_sequence_get_end_iter(s_list);
 
-    containerid last_id = -1;
+    containerid *last_id = NULL;
 
     while(s_iter != s_end){
         struct chunk* ch = (struct chunk*)g_sequence_get(s_iter);
 
         //change the num of container
         //remove the invild datacache
-        
-        
-        if (last_id != -1 && ch->id != last_id)
+        if (last_id && ch->id != *last_id)
         {
-            int *cnt = g_hash_table_lookup(ht_looking_forward_window, &last_id);
-            NOTICE("last_id : %d, count : %d", last_id, *cnt); 
+
+            int *cnt = g_hash_table_lookup(ht_looking_forward_window, last_id);
             if (cnt) {
                 --*cnt;
                 if (*cnt==0) {
-                    g_hash_table_remove(ht_looking_forward_window, &last_id);
+                    g_hash_table_remove(ht_looking_forward_window, last_id);
                     ht_looking_forward_window_size--;
 
-                    //kicks the zero one from datacache
-                    NOTICE("kicks invalid cached container (%d)", last_id);
-        	    GList *con_list = g_hash_table_lookup(ht_dataCache, &last_id);
-                    lru_cache_kicks_with_hash(dataCache, con_list);
-         	    g_hash_table_remove(ht_dataCache, &last_id);
                 }else if(*cnt==1){
                     count_greater_than_two--;
                 }
             }
-            last_id = -1;
         }
-	
-	
-	
+
         //lookup container in data cache
         GList *con_list = g_hash_table_lookup(ht_dataCache, &ch->id);
         if (con_list) {
@@ -544,31 +531,6 @@ static void remove_cached_chunks_in_unread_list(GSequence* s_list, int32_t* s_le
             s_iter = g_sequence_iter_next(s_iter);
         }
     }
-    
-    //process the last one
-    
-    if (last_id != -1 )
-    {
-        int *cnt = g_hash_table_lookup(ht_looking_forward_window, &last_id);
-        NOTICE("last_id : %d, count : %d", last_id, *cnt); 
-        if (cnt) {
-            --*cnt;
-            if (*cnt==0) {
-                g_hash_table_remove(ht_looking_forward_window, &last_id);
-                ht_looking_forward_window_size--;
-
-                //kicks the zero one from datacache
-                NOTICE("kicks invalid cached container (%d)", last_id);
-        	GList *con_list = g_hash_table_lookup(ht_dataCache, &last_id);
-                lru_cache_kicks_with_hash(dataCache, con_list);
-		g_hash_table_remove(ht_dataCache, &last_id);
-            }else if(*cnt==1){
-                count_greater_than_two--;
-            }
-        }
-        last_id = -1;
-    }
-    
     *s_len = len;
 }
 
@@ -592,40 +554,6 @@ static int is_fetch_container(int *pattern, int len, int chunk_num, int pattern_
     }
     return 0;
 }
-//
-//
-//static containerid* rio_read_next_n_records(struct backupVersion* b, int n, int *k) {
-//    int t;
-//    if (is_window_end) {
-//        *k = 0;
-//        return NULL;
-//    }
-//    /* ids[0] indicates the number of IDs */
-//    containerid *ids = (containerid *) malloc(sizeof(containerid) * n);
-//    t = rio_readnb(&rio, &ids[0], n*sizeof(containerid));//try to read n container ids
-//    t /= sizeof(containerid);
-//
-//    /* TEMPORARY_ID indicates all records have been read. */
-//    if(ids[t-1] == TEMPORARY_ID){
-//        is_window_end = 1;
-//        t--;
-//        if (t == 0) {
-//            free(ids);
-//            return NULL;
-//        }
-//    }
-//    *k = t;
-//
-////        int i=0;
-////        NOTICE("---->rio read containers: %d / %d", *k, n);
-////        for (i=0; i<*k; i++) {
-////            NOTICE("-------->rio read container: %lld", ids[i], *k);
-////        }
-//
-//    return ids;
-//}
-
-
 
 static containerid* rio_read_next_n_records(struct backupVersion* b, int n, int *k) {
     static int end = 0;
@@ -654,7 +582,7 @@ static containerid* rio_read_next_n_records(struct backupVersion* b, int n, int 
 
 
 static void destroy_looking_forward_window(){
-    //g_queue_free(looking_forward_queue);
+    g_queue_free(looking_forward_queue);
 
     g_hash_table_remove_all(ht_looking_forward_window);
     g_hash_table_destroy(ht_looking_forward_window);
@@ -673,7 +601,7 @@ static void fill_looking_forward_window_one_by_one(){
             break;
 
         assert(k==1);
-        //g_queue_push_tail(looking_forward_queue, pid);
+        g_queue_push_tail(looking_forward_queue, pid);
         looking_forward_window_size++;
 
         int *cnt = g_hash_table_lookup(ht_looking_forward_window, pid);
@@ -723,7 +651,7 @@ static void fill_looking_forward_window_by_batch(int add_size){
         for (i = 0; i < k; i++) {
             containerid *cid = (containerid *)malloc(sizeof(containerid));
             *cid = ids[i];
-            //g_queue_push_tail(looking_forward_queue, cid);
+            g_queue_push_tail(looking_forward_queue, cid);
 
             int *cnt = g_hash_table_lookup(ht_looking_forward_window, cid);
             if (!cnt) {
@@ -749,7 +677,7 @@ static void fill_looking_forward_window_by_batch(int add_size){
 
 
 static void init_looking_forward_window(int n){
-    //looking_forward_queue = g_queue_new();
+    looking_forward_queue = g_queue_new();
     //rio_readinitb(&rio, (jcr.bv)->record_fp);
 
     fill_looking_forward_window_by_batch(n);
@@ -758,17 +686,11 @@ static void init_looking_forward_window(int n){
 static void remove_looking_forward_window(int remove_size){
     int i;
     //remove containers which will be processed in the window
-    
-    /*
+
     for (i=0; i<remove_size; i++) {
         containerid* cid = g_queue_pop_head(looking_forward_queue);
         assert(cid);
-    */    
-        
-    // unchanged
-    /*
         int *cnt = g_hash_table_lookup(ht_looking_forward_window, cid);
-        NOTICE("curcid : %d, count : %d", *cid, *cnt); 
         if (cnt) {
             --*cnt;
             if (*cnt==0) {
@@ -777,19 +699,15 @@ static void remove_looking_forward_window(int remove_size){
 
                 //kicks the zero one from datacache
                 //NOTICE("kicks invalid cached container (%d)", *cid);
-        	//GList *con_list = g_hash_table_lookup(ht_dataCache, cid);
-                //lru_cache_kicks_with_hash(dataCache, con_list);
-                
-		//g_hash_table_remove(ht_dataCache, cid);
+                //lru_cache_kicks(dataCache, cid, container_check_id);
 
             }else if(*cnt==1){
                 count_greater_than_two--;
             }
         }
-   
         free(cid);
     }
-    */
+
     looking_forward_window_size -= remove_size;
 }
 
@@ -805,7 +723,7 @@ static void slide_looking_forward_window(int add_size){
 }
 
 
-void* optimal_pattern_restore_thread(void *arg) {
+void* pattern_optimal_restore_plus_thread(void *arg) {
     struct segment *s1 = NULL, *s2 = NULL;
     GSequence *s1_chunk_list, *s2_chunk_list;
     int32_t s1_cur_len, s2_cur_len;
@@ -920,17 +838,16 @@ void* optimal_pattern_restore_thread(void *arg) {
                     TIMER_BEGIN(13);
 
                     struct container* con = retrieve_container_by_id(ch->id);
-                    	jcr.read_container_num++;
                     //lookup the container in the looking forward window.
 
                     TIMER_END(13,jcr.retrieve_con_time);
 
                     int *cnt = g_hash_table_lookup(ht_looking_forward_window, &ch->id);
                     assert(cnt);
-                    	NOTICE("the s1 container (%d) in window count : %d", ch->id, *cnt);
                     if (*cnt > pattern_count) {//it is in window
                         insert_container_into_data_cache(con);
                     }
+                    jcr.read_container_num++;
                     	TIMER_DECLARE(11);
 			TIMER_BEGIN(11);
                     read_data_by_pattern_in_data_cache(s1_chunk_list,s1_cur_len, con);
@@ -948,23 +865,21 @@ void* optimal_pattern_restore_thread(void *arg) {
                 //generate the merged patterns in seqence s1, s2 and t
                 pattern = generate_merged_pattern(s1_chunk_list, s2_chunk_list, t_chunk_list, s1_cur_len, s2_cur_len, t_num, &pattern_count);
                 if (destor.restore_cache[1]&&is_fetch_container(pattern, t_num, me->chunk_num, pattern_count, ch->id)) {
-
-                    
                     TIMER_DECLARE(13);
                     TIMER_BEGIN(13);
+
                     struct container* con = retrieve_container_by_id(ch->id);
-                    	jcr.read_container_num++;
                     //lookup the container in the looking forward window.
 
                     TIMER_END(13,jcr.retrieve_con_time);
 
                     int *cnt = g_hash_table_lookup(ht_looking_forward_window, &ch->id);
                     assert(cnt);
-                    	NOTICE("the s2 container (%d) in window count : %d", ch->id, *cnt);
                     if (*cnt > pattern_count) {//it is in window
                         insert_container_into_data_cache(con);
                     }
 
+                    jcr.read_container_num++;
 			TIMER_DECLARE(11);
 			TIMER_BEGIN(11);
                     read_data_by_pattern_in_data_cache(s1_chunk_list,s1_cur_len, con);
@@ -1021,10 +936,6 @@ void* optimal_pattern_restore_thread(void *arg) {
             break;
     }
 
-    //caculate the retrieve container times
-    WARNING("read %d containers", jcr.read_container_num);
-    
-    
     sync_queue_term(restore_chunk_queue);
     if (s1_chunk_list) {
         g_sequence_free(s1_chunk_list);
